@@ -2,7 +2,7 @@ pub struct Executor {}
 
 pub struct Context {}
 
-impl super::New for Executor {
+impl crate::command::New for Executor {
     fn new() -> anyhow::Result<(Self, Self::Context)>
     where
         Self: Sized,
@@ -11,22 +11,22 @@ impl super::New for Executor {
     }
 }
 
-impl super::Execute for Executor {
+impl crate::command::Execute for Executor {
     type Context = Context;
 
     fn prompt(&self, _ctx: &Self::Context) -> String {
         "$".to_string()
     }
 
-    fn prepare(&self, cmd: &str) -> super::Prepare {
+    fn prepare(&self, cmd: &str) -> crate::command::Prepare {
         if cmd == "cat" {
-            return super::Prepare {
+            return crate::command::Prepare {
                 command: cmd.to_string(),
                 stdin_required: true,
             };
         }
 
-        super::Prepare {
+        crate::command::Prepare {
             command: cmd.to_string(),
             stdin_required: false,
         }
@@ -35,15 +35,15 @@ impl super::Execute for Executor {
     fn execute(
         &self,
         _ctx: &mut Self::Context,
-        cmd: super::CommandInput,
-    ) -> anyhow::Result<super::OutputAction> {
-        let output = super::CommandOutput {
+        cmd: crate::command::CommandInput,
+    ) -> anyhow::Result<crate::command::OutputAction> {
+        let output = crate::command::CommandOutput {
             prompt: cmd.prompt,
             command: cmd.command.clone(),
             stdin: cmd.stdin.unwrap_or_default(),
             stdout: vec![cmd.command],
             stderr: Vec::new(),
         };
-        Ok(super::OutputAction::Command(output))
+        Ok(crate::command::OutputAction::Command(output))
     }
 }

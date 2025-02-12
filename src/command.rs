@@ -41,5 +41,3 @@ pub trait New: Execute {
     where
         Self: Sized;
 }
-
-pub mod echosh;
