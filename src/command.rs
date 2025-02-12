@@ -14,13 +14,13 @@ pub struct CommandInput {
     pub prompt: String,
     pub command: String,
     pub stdin: Option<Vec<String>>,
-    pub runtime: Option<Arc<Runtime>>,
+    pub runtime: Arc<Runtime>,
 }
 
+#[derive(Debug, Clone)]
 pub struct Prepare {
     pub command: String,
     pub stdin_required: bool,
-    pub is_async: bool,
 }
 
 pub trait Execute {

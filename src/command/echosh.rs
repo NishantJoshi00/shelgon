@@ -22,7 +22,6 @@ impl super::Execute for Executor {
         super::Prepare {
             command: cmd.to_string(),
             stdin_required: false,
-            is_async: false,
         }
     }
 

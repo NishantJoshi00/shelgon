@@ -1,5 +1,6 @@
 use std::{io, sync::Arc};
 
+use anyhow::{anyhow, ensure};
 use crossterm::{
     event::{KeyCode, KeyModifiers},
     terminal::{EnterAlternateScreen, LeaveAlternateScreen},
@@ -25,7 +26,7 @@ pub struct App<T: command::Execute + command::New> {
 
 enum State {
     Idle(String, usize), // (command, cursor_loc)
-    Running(command::Prepare),
+    Running(command::Prepare, Vec<String>),
 }
 
 #[derive(Debug, Default)]
@@ -96,12 +97,12 @@ impl<T: command::New + command::Execute> App<T> {
                 let history_para = Paragraph::new(history).wrap(Wrap { trim: true });
                 frame.render_widget(history_para, area);
             }
-            State::Running(ref _pre) => unreachable!(),
+            State::Running(..) => unreachable!(),
         }
     }
 
     fn input(&mut self, event: crossterm::event::Event) -> anyhow::Result<Next> {
-        if matches!(self.state, State::Running(_)) {
+        if matches!(self.state, State::Running(..)) {
             return Ok(Next::Continue);
         }
         if let crossterm::event::Event::Key(ke) = event {
@@ -109,12 +110,10 @@ impl<T: command::New + command::Execute> App<T> {
                 (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
                     return Ok(Next::Exit("".to_string()))
                 }
-
                 (KeyCode::Char('l'), KeyModifiers::CONTROL) => {
                     self.history.clear();
                     return Ok(Next::Continue);
                 }
-
                 (KeyCode::Left, KeyModifiers::NONE) => self.move_cursor_left(),
                 (KeyCode::Right, KeyModifiers::NONE) => self.move_cursor_right(),
                 (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => match self.state {
@@ -122,8 +121,14 @@ impl<T: command::New + command::Execute> App<T> {
                         cmd.insert(*cursor, c);
                         *cursor += 1;
                     }
-                    State::Running(_) => unreachable!(),
+                    State::Running(..) => unreachable!(),
                 },
+                (KeyCode::Backspace, KeyModifiers::NONE) => {
+                    self.cursor_backspace();
+                }
+                (KeyCode::Enter, KeyModifiers::NONE) => {
+                    self.execute_command()?;
+                }
                 _ => {}
             }
         }
@@ -172,7 +177,7 @@ impl<T: command::New + command::Execute> App<T> {
 
     fn move_cursor_left(&mut self) {
         match self.state {
-            State::Idle(_, 0) | State::Running(_) => {}
+            State::Idle(_, 0) | State::Running(..) => {}
             State::Idle(_, ref mut cursor) => {
                 *cursor -= 1;
             }
@@ -185,8 +190,49 @@ impl<T: command::New + command::Execute> App<T> {
             State::Idle(_, ref mut cursor) => {
                 *cursor += 1;
             }
-            State::Running(_) => {}
+            State::Running(..) => {}
         }
+    }
+
+    fn cursor_backspace(&mut self) {
+        match self.state {
+            State::Idle(ref mut _cmd, 0) => {}
+            State::Idle(ref mut cmd, ref mut cursor) => {
+                cmd.remove(*cursor - 1);
+                *cursor -= 1;
+            }
+            State::Running(..) => {}
+        }
+    }
+
+    fn execute_command(&mut self) -> anyhow::Result<()> {
+        let (cmd, _) = match self.state {
+            State::Idle(ref cmd, cursor) => (cmd.clone(), cursor),
+            State::Running(..) => return Ok(()),
+        };
+
+        let prepare = self.executor.prepare(&cmd);
+        self.state = State::Running(prepare.clone(), Vec::new());
+
+        match prepare.stdin_required {
+            true => {}
+            false => {
+                let prompt = self.executor.prompt(&self.context);
+                let output = self.executor.execute(
+                    &mut self.context,
+                    command::CommandInput {
+                        prompt,
+                        command: cmd,
+                        stdin: None,
+                        runtime: self.runtime.clone(),
+                    },
+                )?;
+                self.state = State::Idle(String::new(), 0);
+                self.history.push(output);
+            }
+        }
+
+        Ok(())
     }
 }
 
