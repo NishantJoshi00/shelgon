@@ -36,7 +36,7 @@ impl super::Execute for Executor {
         &self,
         _ctx: &mut Self::Context,
         cmd: super::CommandInput,
-    ) -> anyhow::Result<super::CommandOutput> {
+    ) -> anyhow::Result<super::OutputAction> {
         let output = super::CommandOutput {
             prompt: cmd.prompt,
             command: cmd.command.clone(),
@@ -44,6 +44,6 @@ impl super::Execute for Executor {
             stdout: vec![cmd.command],
             stderr: Vec::new(),
         };
-        Ok(output)
+        Ok(super::OutputAction::Command(output))
     }
 }

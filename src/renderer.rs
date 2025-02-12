@@ -149,16 +149,14 @@ impl<T: command::New + command::Execute> App<T> {
                 (KeyCode::Backspace, KeyModifiers::NONE) => {
                     self.cursor_backspace();
                 }
-                (KeyCode::Enter, KeyModifiers::NONE) => {
-                    match self.state {
-                        State::Idle( .. ) => {
-                            self.execute_command()?;
-                        }
-                        State::Running(ref mut _pre, ref mut stdin) => {
-                            stdin.push(String::new());
-                        }
+                (KeyCode::Enter, KeyModifiers::NONE) => match self.state {
+                    State::Idle(..) => {
+                        self.execute_command()?;
                     }
-                }
+                    State::Running(ref mut _pre, ref mut stdin) => {
+                        stdin.push(String::new());
+                    }
+                },
                 _ => {}
             }
         }
@@ -240,56 +238,54 @@ impl<T: command::New + command::Execute> App<T> {
         }
     }
 
-    fn continue_execution(&mut self) -> anyhow::Result<()> {
+    fn continue_execution(&mut self) -> anyhow::Result<Next> {
         let (prepare, stdin) = match self.state {
             State::Running(ref prep, ref stdin) => (prep.clone(), stdin.clone()),
-            State::Idle(..) => return Ok(()),
+            State::Idle(..) => return Ok(Next::Continue),
         };
 
-        let prompt = self.executor.prompt(&self.context);
-        let output = self.executor.execute(
-            &mut self.context,
-            command::CommandInput {
-                prompt,
-                command: prepare.command.clone(),
-                stdin: Some(stdin),
-                runtime: self.runtime.clone(),
-            },
-        )?;
-        self.state = State::Idle(String::new(), 0);
-        self.history.push(output);
-
-        Ok(())
+        Ok(self._final_execution(&prepare.command, Some(stdin))?)
     }
 
-    fn execute_command(&mut self) -> anyhow::Result<()> {
+    fn execute_command(&mut self) -> anyhow::Result<Next> {
         let (cmd, _) = match self.state {
             State::Idle(ref cmd, cursor) => (cmd.clone(), cursor),
-            State::Running(..) => return Ok(()),
+            State::Running(..) => return Ok(Next::Continue),
         };
 
         let prepare = self.executor.prepare(&cmd);
         self.state = State::Running(prepare.clone(), Vec::new());
 
         match prepare.stdin_required {
-            true => {}
-            false => {
-                let prompt = self.executor.prompt(&self.context);
-                let output = self.executor.execute(
-                    &mut self.context,
-                    command::CommandInput {
-                        prompt,
-                        command: cmd,
-                        stdin: None,
-                        runtime: self.runtime.clone(),
-                    },
-                )?;
-                self.state = State::Idle(String::new(), 0);
-                self.history.push(output);
+            true => Ok(Next::Continue),
+            false => self._final_execution(&cmd, None),
+        }
+    }
+
+    fn _final_execution(&mut self, cmd: &str, stdin: Option<Vec<String>>) -> anyhow::Result<Next> {
+        let prompt = self.executor.prompt(&self.context);
+        let output = self.executor.execute(
+            &mut self.context,
+            command::CommandInput {
+                prompt,
+                command: cmd.to_string(),
+                stdin,
+                runtime: self.runtime.clone(),
+            },
+        )?;
+        self.state = State::Idle(String::new(), 0);
+
+        match output {
+            command::OutputAction::Command(command_output) => self.history.push(command_output),
+            command::OutputAction::Exit => {
+                return Ok(Next::Exit("".to_string()));
+            }
+            command::OutputAction::Clear => {
+                self.history.clear();
             }
         }
 
-        Ok(())
+        Ok(Next::Continue)
     }
 }
 
