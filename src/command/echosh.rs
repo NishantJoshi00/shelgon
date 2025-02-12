@@ -19,6 +19,13 @@ impl super::Execute for Executor {
     }
 
     fn prepare(&self, cmd: &str) -> super::Prepare {
+        if cmd == "cat" {
+            return super::Prepare {
+                command: cmd.to_string(),
+                stdin_required: true,
+            };
+        }
+
         super::Prepare {
             command: cmd.to_string(),
             stdin_required: false,

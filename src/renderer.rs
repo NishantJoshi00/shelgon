@@ -1,6 +1,5 @@
 use std::{io, sync::Arc};
 
-use anyhow::{anyhow, ensure};
 use crossterm::{
     event::{KeyCode, KeyModifiers},
     terminal::{EnterAlternateScreen, LeaveAlternateScreen},
@@ -53,16 +52,16 @@ impl<T: command::New + command::Execute> App<T> {
     }
 
     fn render(&self, frame: &mut Frame) {
+        let prompt = self.executor.prompt(&self.context);
+        let area = frame.area();
+        let mut history = self
+            .history
+            .iter()
+            .flat_map(render_history)
+            .collect::<Vec<_>>();
+
         match &self.state {
             State::Idle(ref cmd, cursor) => {
-                let prompt = self.executor.prompt(&self.context);
-                let area = frame.area();
-                let mut history = self
-                    .history
-                    .iter()
-                    .flat_map(render_history)
-                    .collect::<Vec<_>>();
-
                 let (left_cmd, right_cmd) = cmd.split_at(*cursor);
                 let left_cmd = Span::styled(left_cmd, Style::default().bold());
                 let (cursor, right_cmd) = match right_cmd {
@@ -97,22 +96,42 @@ impl<T: command::New + command::Execute> App<T> {
                 let history_para = Paragraph::new(history).wrap(Wrap { trim: true });
                 frame.render_widget(history_para, area);
             }
-            State::Running(..) => unreachable!(),
+            State::Running(ref prep, stdin) => {
+                history.push(Line::from(vec![
+                    Span::styled(prompt.clone(), Style::default().blue()),
+                    Span::raw(" "),
+                    Span::styled(prep.command.clone(), Style::default().bold()),
+                ]));
+                let stdin = stdin
+                    .iter()
+                    .map(Span::raw)
+                    .map(Line::from)
+                    .collect::<Vec<_>>();
+                history.extend(stdin);
+
+                let history_para = Paragraph::new(history).wrap(Wrap { trim: true });
+                frame.render_widget(history_para, area);
+            }
         }
     }
 
     fn input(&mut self, event: crossterm::event::Event) -> anyhow::Result<Next> {
-        if matches!(self.state, State::Running(..)) {
-            return Ok(Next::Continue);
-        }
+        // if matches!(self.state, State::Running(..)) {
+        //     return Ok(Next::Continue);
+        // }
         if let crossterm::event::Event::Key(ke) = event {
             match (ke.code, ke.modifiers) {
-                (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-                    return Ok(Next::Exit("".to_string()))
-                }
                 (KeyCode::Char('l'), KeyModifiers::CONTROL) => {
                     self.history.clear();
                     return Ok(Next::Continue);
+                }
+
+                (KeyCode::Char('d') | KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+                    if let State::Running(..) = &self.state {
+                        self.continue_execution()?;
+                    } else {
+                        return Ok(Next::Exit("".to_string()));
+                    }
                 }
                 (KeyCode::Left, KeyModifiers::NONE) => self.move_cursor_left(),
                 (KeyCode::Right, KeyModifiers::NONE) => self.move_cursor_right(),
@@ -121,13 +140,24 @@ impl<T: command::New + command::Execute> App<T> {
                         cmd.insert(*cursor, c);
                         *cursor += 1;
                     }
-                    State::Running(..) => unreachable!(),
+                    State::Running(ref mut _pre, ref mut stdin) => {
+                        stdin.last_mut().map(|i| i.push(c)).unwrap_or_else(|| {
+                            stdin.push(c.to_string());
+                        });
+                    }
                 },
                 (KeyCode::Backspace, KeyModifiers::NONE) => {
                     self.cursor_backspace();
                 }
                 (KeyCode::Enter, KeyModifiers::NONE) => {
-                    self.execute_command()?;
+                    match self.state {
+                        State::Idle( .. ) => {
+                            self.execute_command()?;
+                        }
+                        State::Running(ref mut _pre, ref mut stdin) => {
+                            stdin.push(String::new());
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -201,8 +231,35 @@ impl<T: command::New + command::Execute> App<T> {
                 cmd.remove(*cursor - 1);
                 *cursor -= 1;
             }
-            State::Running(..) => {}
+            State::Running(ref mut _pre, ref mut stdin) => {
+                stdin.last_mut().map(|i| i.pop());
+                if stdin.last().map_or(true, |i| i.is_empty()) {
+                    stdin.pop();
+                }
+            }
         }
+    }
+
+    fn continue_execution(&mut self) -> anyhow::Result<()> {
+        let (prepare, stdin) = match self.state {
+            State::Running(ref prep, ref stdin) => (prep.clone(), stdin.clone()),
+            State::Idle(..) => return Ok(()),
+        };
+
+        let prompt = self.executor.prompt(&self.context);
+        let output = self.executor.execute(
+            &mut self.context,
+            command::CommandInput {
+                prompt,
+                command: prepare.command.clone(),
+                stdin: Some(stdin),
+                runtime: self.runtime.clone(),
+            },
+        )?;
+        self.state = State::Idle(String::new(), 0);
+        self.history.push(output);
+
+        Ok(())
     }
 
     fn execute_command(&mut self) -> anyhow::Result<()> {
