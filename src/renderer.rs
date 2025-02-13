@@ -15,27 +15,53 @@ use tokio::runtime::Runtime;
 
 use crate::command::{self};
 
+///
+/// [`App`] is the main application.
+///
+/// commands. This is the main struct that is used to create a shell. This is responsible for
+/// managing state, rendering the shell, and executing the commands.
+///
 pub struct App<T: command::Execute> {
+    /// The executor that is used to execute the commands.
     executor: T,
+    /// The context that is maintained by the [`App`] struct. This is specific to your
     context: T::Context,
+    /// The state of the shell. This is different from the context. This is used to maintain
+    /// information about the renderer.
     state: State,
+    /// The runtime that is passed to the [`Execute`] trait. This is used to facilitate executing
+    /// on [`std::future::Future`]s, creating [`tokio::task::JoinHandle`]s, etc.
     runtime: Arc<Runtime>,
+    /// The history of the commands that are executed.
     history: Vec<command::CommandOutput>,
 }
 
+/// The state of the shell.
 enum State {
-    Idle(String, usize, Option<Vec<String>>), // (command, cursor_loc)
+    /// The shell is idle. This is the default state of the shell.
+    /// This is when the user is typing the command. This state holds the incomplete command, the
+    /// cursor location, and the completions.
+    Idle(String, usize, Option<Vec<String>>),
+    /// The shell is running. This is when the command is being executed. This state holds the
+    /// stdin that is being supplied to the command. And the contextual information about the
+    /// command.
     Running(command::Prepare, Vec<String>),
 }
 
+///
+/// The next action that is to be taken by the shell. As this is a REPL, this action decides
+/// whether to continue the execution or to exit the shell.
 #[derive(Debug, Default)]
 enum Next {
+    /// Continue the execution of the shell.
     #[default]
     Continue,
+    /// Exit the shell.
     Exit(String),
 }
 
 impl<T: command::Execute> App<T> {
+    /// Create a new instance of the [`App`] struct.
     pub fn new(rt: Runtime) -> anyhow::Result<Self>
     where
         T: command::New,
@@ -44,6 +70,7 @@ impl<T: command::Execute> App<T> {
         Ok(Self::new_with_executor(rt, executor, context))
     }
 
+    /// Create a new instance of the [`App`] struct with the executor and the context.
     pub fn new_with_executor(rt: Runtime, executor: T, context: T::Context) -> Self {
         Self {
             executor,
@@ -54,6 +81,7 @@ impl<T: command::Execute> App<T> {
         }
     }
 
+    /// Render the shell.
     fn render(&self, frame: &mut Frame) {
         let prompt = self.executor.prompt(&self.context);
         let area = frame.area();
@@ -133,10 +161,8 @@ impl<T: command::Execute> App<T> {
         }
     }
 
+    /// Handle the input from the user.
     fn input(&mut self, event: crossterm::event::Event) -> anyhow::Result<Next> {
-        // if matches!(self.state, State::Running(..)) {
-        //     return Ok(Next::Continue);
-        // }
         if let crossterm::event::Event::Key(ke) = event {
             match (ke.code, ke.modifiers) {
                 (KeyCode::Char('l'), KeyModifiers::CONTROL) => {
@@ -210,6 +236,15 @@ impl<T: command::Execute> App<T> {
         Ok(Default::default())
     }
 
+    /// Execute the shell.
+    ///
+    /// This is the main method that is used to execute the shell. This is where the shell is
+    /// created and the input is handled. This also converts the shell into raw mode and enables
+    /// the alternate screen.
+    ///
+    /// This method returns an `anyhow::Result<()>` which is used to handle the errors that are
+    /// encountered during the execution of the shell.
+    ///
     pub fn execute(mut self) -> anyhow::Result<()> {
         crossterm::terminal::enable_raw_mode()?;
 
@@ -249,6 +284,7 @@ impl<T: command::Execute> App<T> {
 
     // helpers
 
+    /// Move the cursor to the left by one.
     fn move_cursor_left(&mut self) {
         match self.state {
             State::Idle(_, 0, _) | State::Running(..) => {}
@@ -259,6 +295,7 @@ impl<T: command::Execute> App<T> {
         }
     }
 
+    /// Move the cursor to the right by one.
     fn move_cursor_right(&mut self) {
         match self.state {
             State::Idle(ref cmd, cursor, _) if cursor == cmd.len() => {}
@@ -269,6 +306,7 @@ impl<T: command::Execute> App<T> {
         }
     }
 
+    /// Move the cursor back by one.
     fn cursor_backspace(&mut self) {
         match self.state {
             State::Idle(ref mut _cmd, 0, _) => {}
@@ -286,6 +324,7 @@ impl<T: command::Execute> App<T> {
         }
     }
 
+    /// Continue the execution of the command.
     fn continue_execution(&mut self) -> anyhow::Result<Next> {
         let (prepare, stdin) = match self.state {
             State::Running(ref prep, ref stdin) => (prep.clone(), stdin.clone()),
@@ -295,6 +334,7 @@ impl<T: command::Execute> App<T> {
         self._final_execution(&prepare.command, Some(stdin))
     }
 
+    /// Execute the command.
     fn execute_command(&mut self) -> anyhow::Result<Next> {
         let (cmd, _) = match self.state {
             State::Idle(ref cmd, cursor, _) => (cmd.clone(), cursor),
@@ -310,6 +350,7 @@ impl<T: command::Execute> App<T> {
         }
     }
 
+    /// Execute the command and return the next action.
     fn _final_execution(&mut self, cmd: &str, stdin: Option<Vec<String>>) -> anyhow::Result<Next> {
         let prompt = self.executor.prompt(&self.context);
         let output = self.executor.execute(
@@ -337,6 +378,7 @@ impl<T: command::Execute> App<T> {
     }
 }
 
+/// Render the history of the commands.
 fn render_history(history: &command::CommandOutput) -> Vec<Line> {
     let command = Line::from(vec![
         Span::styled(history.prompt.clone(), Style::default().blue()),
