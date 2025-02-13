@@ -1,4 +1,6 @@
-use std::{io, sync::Arc};
+use std::io;
+#[cfg(feature = "tokio")]
+use std::sync::Arc;
 
 use crossterm::{
     event::{KeyCode, KeyModifiers},
@@ -11,6 +13,7 @@ use ratatui::{
     widgets::{Paragraph, Wrap},
     Frame, Terminal,
 };
+#[cfg(feature = "tokio")]
 use tokio::runtime::Runtime;
 
 use crate::command::{self};
@@ -29,6 +32,7 @@ pub struct App<T: command::Execute> {
     /// The state of the shell. This is different from the context. This is used to maintain
     /// information about the renderer.
     state: State,
+    #[cfg(feature = "tokio")]
     /// The runtime that is passed to the [`Execute`] trait. This is used to facilitate executing
     /// on [`std::future::Future`]s, creating [`tokio::task::JoinHandle`]s, etc.
     runtime: Arc<Runtime>,
@@ -62,20 +66,30 @@ enum Next {
 
 impl<T: command::Execute> App<T> {
     /// Create a new instance of the [`App`] struct.
-    pub fn new(rt: Runtime) -> anyhow::Result<Self>
+    pub fn new(#[cfg(feature = "tokio")] rt: Runtime) -> anyhow::Result<Self>
     where
         T: command::New,
     {
         let (executor, context) = T::new()?;
-        Ok(Self::new_with_executor(rt, executor, context))
+        Ok(Self::new_with_executor(
+            #[cfg(feature = "tokio")]
+            rt,
+            executor,
+            context,
+        ))
     }
 
     /// Create a new instance of the [`App`] struct with the executor and the context.
-    pub fn new_with_executor(rt: Runtime, executor: T, context: T::Context) -> Self {
+    pub fn new_with_executor(
+        #[cfg(feature = "tokio")] rt: Runtime,
+        executor: T,
+        context: T::Context,
+    ) -> Self {
         Self {
             executor,
             context,
             state: State::Idle(String::new(), 0, None),
+            #[cfg(feature = "tokio")]
             runtime: Arc::new(rt),
             history: Vec::new(),
         }
@@ -359,6 +373,7 @@ impl<T: command::Execute> App<T> {
                 prompt,
                 command: cmd.to_string(),
                 stdin,
+                #[cfg(feature = "tokio")]
                 runtime: self.runtime.clone(),
             },
         )?;

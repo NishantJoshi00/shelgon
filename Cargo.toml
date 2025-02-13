@@ -3,8 +3,12 @@ name = "shelgon"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["tokio"]
+tokio = ["tokio/rt"]
+
 [dependencies]
-tokio = { version = "1.43.0", features = ["full"] }
+tokio = { version = "1.43.0", features = ["rt"], optional = true }
 anyhow = "1.0.95"
 ratatui = "0.29.0"
 crossterm = "0.28.1"

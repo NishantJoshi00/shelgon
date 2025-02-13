@@ -1,5 +1,6 @@
+#[cfg(feature = "tokio")]
 use std::sync::Arc;
-
+#[cfg(feature = "tokio")]
 use tokio::runtime::Runtime;
 
 ///
@@ -47,6 +48,7 @@ pub struct CommandInput {
     pub command: String,
     /// The input that is supplied to the command. (optional)
     pub stdin: Option<Vec<String>>,
+    #[cfg(feature = "tokio")]
     /// Supplying [`tokio::runtime::Runtime`] to the [`Execute`] trait. This is to facilitate
     /// executing [`std::future::Future`]s, creating [`tokio::task::JoinHandle`]s, etc.
     pub runtime: Arc<Runtime>,
