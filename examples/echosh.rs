@@ -1,7 +1,7 @@
 
 fn main() -> anyhow::Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
-    let app = sheller::renderer::App::<sheller::sample::echosh::Executor>::new(rt)?;
+    let app = sheller::renderer::App::<Executor>::new(rt)?;
 
     app.execute()
 }
@@ -10,7 +10,7 @@ pub struct Executor {}
 
 pub struct Context {}
 
-impl crate::command::New for Executor {
+impl sheller::command::New for Executor {
     fn new() -> anyhow::Result<(Self, Self::Context)>
     where
         Self: Sized,
@@ -19,22 +19,22 @@ impl crate::command::New for Executor {
     }
 }
 
-impl crate::command::Execute for Executor {
+impl sheller::command::Execute for Executor {
     type Context = Context;
 
     fn prompt(&self, _ctx: &Self::Context) -> String {
         "$".to_string()
     }
 
-    fn prepare(&self, cmd: &str) -> crate::command::Prepare {
+    fn prepare(&self, cmd: &str) -> sheller::command::Prepare {
         if cmd == "cat" {
-            return crate::command::Prepare {
+            return sheller::command::Prepare {
                 command: cmd.to_string(),
                 stdin_required: true,
             };
         }
 
-        crate::command::Prepare {
+        sheller::command::Prepare {
             command: cmd.to_string(),
             stdin_required: false,
         }
@@ -43,15 +43,15 @@ impl crate::command::Execute for Executor {
     fn execute(
         &self,
         _ctx: &mut Self::Context,
-        cmd: crate::command::CommandInput,
-    ) -> anyhow::Result<crate::command::OutputAction> {
-        let output = crate::command::CommandOutput {
+        cmd: sheller::command::CommandInput,
+    ) -> anyhow::Result<sheller::command::OutputAction> {
+        let output = sheller::command::CommandOutput {
             prompt: cmd.prompt,
             command: cmd.command.clone(),
             stdin: cmd.stdin.unwrap_or_default(),
             stdout: vec![cmd.command],
             stderr: Vec::new(),
         };
-        Ok(crate::command::OutputAction::Command(output))
+        Ok(sheller::command::OutputAction::Command(output))
     }
 }
