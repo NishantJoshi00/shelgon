@@ -1,3 +1,87 @@
+//! Terminal UI renderer and application state management for REPL shells.
+//!
+//! This module provides the core [`App`] type which manages the terminal user interface,
+//! handles user input, and coordinates command execution. It uses the `ratatui` library
+//! for terminal rendering and `crossterm` for terminal manipulation.
+//!
+//! # Features
+//!
+//! - Terminal UI with command history
+//! - Command input with cursor movement
+//! - Tab completion support
+//! - Multi-line input for commands requiring STDIN
+//! - Color-coded output (command prompt, errors)
+//! - Screen clearing and alternate screen support
+//!
+//! # Terminal UI States
+//!
+//! The renderer operates in two primary states:
+//!
+//! - **Idle**: Accepting user input with command editing capabilities
+//! - **Running**: Processing command execution with optional STDIN input
+//!
+//! # Key Bindings
+//!
+//! The following key combinations are supported:
+//!
+//! - `Ctrl+L`: Clear screen
+//! - `Ctrl+C/Ctrl+D`: Exit shell (or terminate current command if running)
+//! - `Left/Right`: Move cursor
+//! - `Tab`: Trigger command completion
+//! - `Enter`: Execute command or add new STDIN line
+//! - `Backspace`: Delete character
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use shelgon::renderer::App;
+//! use shelgon::command::{self, Execute, CommandOutput, OutputAction};
+//! use tokio::runtime::Runtime;
+//!
+//! struct MyExecutor {}
+//!
+//! impl command::Execute for MyExecutor {
+//!     type Context = ();
+//!     
+//!     fn prompt(&self, _: &Self::Context) -> String {
+//!         "$".to_string()
+//!     }
+//!
+//!     fn prepare(&self, cmd: &str) -> command::Prepare {
+//!         command::Prepare {
+//!             command: cmd.to_string(),
+//!             stdin_required: false,
+//!         }
+//!     }
+//!
+//!     fn execute(
+//!         &self,
+//!         _: &mut Self::Context,
+//!         input: command::CommandInput,
+//!     ) -> anyhow::Result<OutputAction> {
+//!         Ok(OutputAction::Command(CommandOutput {
+//!             prompt: input.prompt,
+//!             command: input.command,
+//!             stdin: Vec::new(),
+//!             stdout: vec!["Hello, world!".to_string()],
+//!             stderr: Vec::new(),
+//!         }))
+//!     }
+//! }
+//!
+//! fn main() -> anyhow::Result<()> {
+//!     let rt = Runtime::new()?;
+//!     let app = App::new_with_executor(rt, MyExecutor {}, ());
+//!     app.execute()
+//! }
+//! ```
+//!
+//! # Features
+//!
+//! - **tokio**: Enables async runtime support via [`tokio::runtime::Runtime`]
+//!
+//!
+
 use std::io;
 #[cfg(feature = "tokio")]
 use std::sync::Arc;
@@ -118,7 +202,15 @@ impl<T: command::Execute> App<T> {
                     }
                     right_cmd => {
                         let cursor = Span::styled(
-                            right_cmd.chars().next().unwrap().to_string(),
+                            //
+                            // # Safety: `right_cmd` will never be empty.
+                            //
+                            #[allow(clippy::expect_used)]
+                            right_cmd
+                                .chars()
+                                .next()
+                                .expect("match statement failed")
+                                .to_string(),
                             Style::default()
                                 .bg(ratatui::style::Color::White)
                                 .fg(ratatui::style::Color::Black),

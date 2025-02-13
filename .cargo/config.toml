@@ -1,0 +1,10 @@
+[target.'cfg(all())']
+rustflags = [
+    "-D", "warnings",
+    "-D", "missing_docs",
+    "-D", "rustdoc::missing_crate_level_docs",
+    "-D", "clippy::unwrap_used",
+    "-D", "clippy::expect_used",
+    "-D", "clippy::unimplemented",
+    "-D", "clippy::todo",
+]

@@ -1,3 +1,65 @@
+//! Command execution and shell interaction primitives for building REPLs.
+//!
+//! This module provides the core traits and types needed to implement custom REPL (Read-Eval-Print Loop)
+//! shells. The primary components are:
+//!
+//! - [`Execute`]: The main trait for implementing shell command execution
+//! - [`CommandInput`]: Input data structure passed to command executors
+//! - [`CommandOutput`]: Output data structure for command results
+//! - [`OutputAction`]: Enum controlling shell behavior after command execution
+//!
+//! # Architecture
+//!
+//! The command execution flow follows these steps:
+//!
+//! 1. Shell displays a prompt (via [`Execute::prompt`])
+//! 2. User enters a command
+//! 3. Shell optionally handles tab completion (via [`Execute::completion`])
+//! 4. Shell prepares command execution (via [`Execute::prepare`])
+//! 5. Command is executed (via [`Execute::execute`])
+//! 6. Output is rendered based on returned [`OutputAction`]
+//!
+//! # Example
+//!
+//! ```rust
+//! use shelgon::command::{self, Execute, CommandInput, CommandOutput, OutputAction};
+//!
+//! struct MyExecutor {}
+//!
+//! impl Execute for MyExecutor {
+//!     type Context = ();
+//!
+//!     fn prompt(&self, _: &Self::Context) -> String {
+//!         "$ ".to_string()
+//!     }
+//!
+//!     fn prepare(&self, cmd: &str) -> command::Prepare {
+//!         command::Prepare {
+//!             command: cmd.to_string(),
+//!             stdin_required: false,
+//!         }
+//!     }
+//!
+//!     fn execute(
+//!         &self,
+//!         _: &mut Self::Context,
+//!         input: CommandInput
+//!     ) -> anyhow::Result<OutputAction> {
+//!         Ok(OutputAction::Command(CommandOutput {
+//!             prompt: input.prompt,
+//!             command: input.command.clone(),
+//!             stdin: Vec::new(),
+//!             stdout: vec![format!("Executed: {}", input.command)],
+//!             stderr: Vec::new(),
+//!         }))
+//!     }
+//! }
+//! ```
+//!
+//! # Features
+//!
+//! - **tokio**: Enables async runtime support via [`tokio::runtime::Runtime`] in [`CommandInput`]
+
 #[cfg(feature = "tokio")]
 use std::sync::Arc;
 #[cfg(feature = "tokio")]
@@ -11,10 +73,15 @@ use tokio::runtime::Runtime;
 /// `stdout` & `stderr` are the output of the command.
 ///
 pub struct CommandOutput {
+    /// The prompt that was displayed.
     pub prompt: String,
+    /// The command that was executed
     pub command: String,
+    /// The input that was supplied to the command. (optional)
     pub stdin: Vec<String>,
+    /// The output of the command.
     pub stdout: Vec<String>,
+    /// The error output of the command. (optional)
     pub stderr: Vec<String>,
 }
 
@@ -86,7 +153,7 @@ pub struct Prepare {
 ///
 ///
 pub trait Execute {
-    /// This is the context that is maintained by the [`App`] struct. This is specific to your
+    /// This is the context that is maintained by the `App` struct. This is specific to your
     /// [`Execute`] trait. This can contain any data that is required by the command.
     ///
     /// The context is read only during the [`Execute::prompt`], [`Execute::completion`] & [`Execute::prepare`] method,
@@ -135,7 +202,12 @@ pub trait Execute {
     fn execute(&self, ctx: &mut Self::Context, cmd: CommandInput) -> anyhow::Result<OutputAction>;
 }
 
+///
+/// [`New`] is the trait that is implemented by the commands that are to be executed. This is used
+/// to quickly create a new instance of the command.
+///
 pub trait New: Execute {
+    /// This is the new method that is used to create a new instance of the command.
     fn new() -> anyhow::Result<(Self, Self::Context)>
     where
         Self: Sized;

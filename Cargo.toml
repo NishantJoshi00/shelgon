@@ -14,3 +14,10 @@ ratatui = "0.29.0"
 crossterm = "0.28.1"
 
 tracing = "0.1.41"
+
+[dev-dependencies]
+tokio = { version = "1.43.0", features = ["rt-multi-thread"] }
+
+[[example]]
+name = "echosh"
+required-features = ["tokio"]  # If needed
