@@ -32,6 +32,14 @@ pub struct Prepare {
 pub trait Execute {
     type Context;
     fn prompt(&self, ctx: &Self::Context) -> String;
+    fn completion(
+        &self,
+        _ctx: &Self::Context,
+        _incomplete_command: &str,
+    ) -> anyhow::Result<(String, Vec<String>)> { // completion + branches
+        Ok((String::new(), Vec::new()))
+    }
+
     fn prepare(&self, cmd: &str) -> Prepare;
     fn execute(&self, ctx: &mut Self::Context, cmd: CommandInput) -> anyhow::Result<OutputAction>;
 }

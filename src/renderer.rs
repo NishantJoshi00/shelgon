@@ -24,7 +24,7 @@ pub struct App<T: command::Execute + command::New> {
 }
 
 enum State {
-    Idle(String, usize), // (command, cursor_loc)
+    Idle(String, usize, Option<Vec<String>>), // (command, cursor_loc)
     Running(command::Prepare, Vec<String>),
 }
 
@@ -41,11 +41,11 @@ impl<T: command::New + command::Execute> App<T> {
         Ok(Self::new_with_executor(rt, executor, context))
     }
 
-    fn new_with_executor(rt: Runtime, executor: T, context: T::Context) -> Self {
+    pub fn new_with_executor(rt: Runtime, executor: T, context: T::Context) -> Self {
         Self {
             executor,
             context,
-            state: State::Idle(String::new(), 0),
+            state: State::Idle(String::new(), 0, None),
             runtime: Arc::new(rt),
             history: Vec::new(),
         }
@@ -54,14 +54,14 @@ impl<T: command::New + command::Execute> App<T> {
     fn render(&self, frame: &mut Frame) {
         let prompt = self.executor.prompt(&self.context);
         let area = frame.area();
-        let mut history = self
+        let mut text_content = self
             .history
             .iter()
             .flat_map(render_history)
             .collect::<Vec<_>>();
 
         match &self.state {
-            State::Idle(ref cmd, cursor) => {
+            State::Idle(ref cmd, cursor, comp) => {
                 let (left_cmd, right_cmd) = cmd.split_at(*cursor);
                 let left_cmd = Span::styled(left_cmd, Style::default().bold());
                 let (cursor, right_cmd) = match right_cmd {
@@ -85,7 +85,7 @@ impl<T: command::New + command::Execute> App<T> {
                     }
                 };
 
-                history.push(Line::from(vec![
+                text_content.push(Line::from(vec![
                     Span::styled(prompt.clone(), Style::default().blue()),
                     Span::raw(" "),
                     Span::styled(left_cmd.to_string(), Style::default().bold()),
@@ -93,11 +93,26 @@ impl<T: command::New + command::Execute> App<T> {
                     right_cmd,
                 ]));
 
-                let history_para = Paragraph::new(history).wrap(Wrap { trim: true });
-                frame.render_widget(history_para, area);
+                if let Some(comp) = comp {
+                    let completions = comp
+                        .iter()
+                        .map(|cmp| cmd.to_string() + cmp)
+                        .map(|line| {
+                            Span::styled(
+                                line,
+                                Style::default().bg(ratatui::style::Color::Rgb(200, 200, 200)),
+                            )
+                        })
+                        .map(Line::from)
+                        .collect::<Vec<_>>();
+                    text_content.extend(completions);
+                }
+
+                let text_para = Paragraph::new(text_content).wrap(Wrap { trim: true });
+                frame.render_widget(text_para, area);
             }
             State::Running(ref prep, stdin) => {
-                history.push(Line::from(vec![
+                text_content.push(Line::from(vec![
                     Span::styled(prompt.clone(), Style::default().blue()),
                     Span::raw(" "),
                     Span::styled(prep.command.clone(), Style::default().bold()),
@@ -107,9 +122,9 @@ impl<T: command::New + command::Execute> App<T> {
                     .map(Span::raw)
                     .map(Line::from)
                     .collect::<Vec<_>>();
-                history.extend(stdin);
+                text_content.extend(stdin);
 
-                let history_para = Paragraph::new(history).wrap(Wrap { trim: true });
+                let history_para = Paragraph::new(text_content).wrap(Wrap { trim: true });
                 frame.render_widget(history_para, area);
             }
         }
@@ -135,10 +150,38 @@ impl<T: command::New + command::Execute> App<T> {
                 }
                 (KeyCode::Left, KeyModifiers::NONE) => self.move_cursor_left(),
                 (KeyCode::Right, KeyModifiers::NONE) => self.move_cursor_right(),
+                (KeyCode::Tab, KeyModifiers::NONE) => {
+                    if let State::Idle(ref mut cmd, ref mut cursor, ref mut comp @ None) =
+                        self.state
+                    {
+                        if *cursor == cmd.len() {
+                            let (fixed, variable) = self.executor.completion(&self.context, cmd)?;
+                            cmd.push_str(&fixed);
+                            *cursor = cmd.len();
+                            *comp = Some(variable);
+                        }
+                    }
+                }
                 (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => match self.state {
-                    State::Idle(ref mut cmd, ref mut cursor) => {
+                    State::Idle(ref mut cmd, ref mut cursor, ref mut comp) => {
                         cmd.insert(*cursor, c);
                         *cursor += 1;
+
+                        match comp.as_mut() {
+                            None => {}
+                            Some(cmp) => {
+                                *cmp = cmp
+                                    .iter()
+                                    .filter_map(|i| {
+                                        if i.starts_with(&cmd[..*cursor]) {
+                                            Some(i[*cursor..].to_string())
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .collect::<Vec<_>>();
+                            }
+                        }
                     }
                     State::Running(ref mut _pre, ref mut stdin) => {
                         stdin.last_mut().map(|i| i.push(c)).unwrap_or_else(|| {
@@ -205,17 +248,18 @@ impl<T: command::New + command::Execute> App<T> {
 
     fn move_cursor_left(&mut self) {
         match self.state {
-            State::Idle(_, 0) | State::Running(..) => {}
-            State::Idle(_, ref mut cursor) => {
+            State::Idle(_, 0, _) | State::Running(..) => {}
+            State::Idle(_, ref mut cursor, ref mut comp) => {
                 *cursor -= 1;
+                *comp = None;
             }
         }
     }
 
     fn move_cursor_right(&mut self) {
         match self.state {
-            State::Idle(ref cmd, cursor) if cursor == cmd.len() => {}
-            State::Idle(_, ref mut cursor) => {
+            State::Idle(ref cmd, cursor, _) if cursor == cmd.len() => {}
+            State::Idle(_, ref mut cursor, _) => {
                 *cursor += 1;
             }
             State::Running(..) => {}
@@ -224,10 +268,11 @@ impl<T: command::New + command::Execute> App<T> {
 
     fn cursor_backspace(&mut self) {
         match self.state {
-            State::Idle(ref mut _cmd, 0) => {}
-            State::Idle(ref mut cmd, ref mut cursor) => {
+            State::Idle(ref mut _cmd, 0, _) => {}
+            State::Idle(ref mut cmd, ref mut cursor, ref mut comp) => {
                 cmd.remove(*cursor - 1);
                 *cursor -= 1;
+                *comp = None;
             }
             State::Running(ref mut _pre, ref mut stdin) => {
                 stdin.last_mut().map(|i| i.pop());
@@ -244,12 +289,12 @@ impl<T: command::New + command::Execute> App<T> {
             State::Idle(..) => return Ok(Next::Continue),
         };
 
-        Ok(self._final_execution(&prepare.command, Some(stdin))?)
+        self._final_execution(&prepare.command, Some(stdin))
     }
 
     fn execute_command(&mut self) -> anyhow::Result<Next> {
         let (cmd, _) = match self.state {
-            State::Idle(ref cmd, cursor) => (cmd.clone(), cursor),
+            State::Idle(ref cmd, cursor, _) => (cmd.clone(), cursor),
             State::Running(..) => return Ok(Next::Continue),
         };
 
@@ -273,7 +318,7 @@ impl<T: command::New + command::Execute> App<T> {
                 runtime: self.runtime.clone(),
             },
         )?;
-        self.state = State::Idle(String::new(), 0);
+        self.state = State::Idle(String::new(), 0, None);
 
         match output {
             command::OutputAction::Command(command_output) => self.history.push(command_output),
