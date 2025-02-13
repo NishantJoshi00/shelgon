@@ -3,10 +3,6 @@ name = "sheller"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "sheller"
-path = "src/bin/shell.rs"
-
 [dependencies]
 tokio = { version = "1.43.0", features = ["full"] }
 anyhow = "1.0.95"
