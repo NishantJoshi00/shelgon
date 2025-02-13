@@ -15,7 +15,7 @@ use tokio::runtime::Runtime;
 
 use crate::command::{self};
 
-pub struct App<T: command::Execute + command::New> {
+pub struct App<T: command::Execute> {
     executor: T,
     context: T::Context,
     state: State,
@@ -35,8 +35,11 @@ enum Next {
     Exit(String),
 }
 
-impl<T: command::New + command::Execute> App<T> {
-    pub fn new(rt: Runtime) -> anyhow::Result<Self> {
+impl<T: command::Execute> App<T> {
+    pub fn new(rt: Runtime) -> anyhow::Result<Self>
+    where
+        T: command::New,
+    {
         let (executor, context) = T::new()?;
         Ok(Self::new_with_executor(rt, executor, context))
     }

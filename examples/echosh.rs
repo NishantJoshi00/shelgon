@@ -1,7 +1,6 @@
-
 fn main() -> anyhow::Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
-    let app = sheller::renderer::App::<Executor>::new(rt)?;
+    let app = shelgon::renderer::App::<Executor>::new(rt)?;
 
     app.execute()
 }
@@ -10,7 +9,7 @@ pub struct Executor {}
 
 pub struct Context {}
 
-impl sheller::command::New for Executor {
+impl shelgon::command::New for Executor {
     fn new() -> anyhow::Result<(Self, Self::Context)>
     where
         Self: Sized,
@@ -19,22 +18,22 @@ impl sheller::command::New for Executor {
     }
 }
 
-impl sheller::command::Execute for Executor {
+impl shelgon::command::Execute for Executor {
     type Context = Context;
 
     fn prompt(&self, _ctx: &Self::Context) -> String {
         "$".to_string()
     }
 
-    fn prepare(&self, cmd: &str) -> sheller::command::Prepare {
+    fn prepare(&self, cmd: &str) -> shelgon::command::Prepare {
         if cmd == "cat" {
-            return sheller::command::Prepare {
+            return shelgon::command::Prepare {
                 command: cmd.to_string(),
                 stdin_required: true,
             };
         }
 
-        sheller::command::Prepare {
+        shelgon::command::Prepare {
             command: cmd.to_string(),
             stdin_required: false,
         }
@@ -43,15 +42,15 @@ impl sheller::command::Execute for Executor {
     fn execute(
         &self,
         _ctx: &mut Self::Context,
-        cmd: sheller::command::CommandInput,
-    ) -> anyhow::Result<sheller::command::OutputAction> {
-        let output = sheller::command::CommandOutput {
+        cmd: shelgon::command::CommandInput,
+    ) -> anyhow::Result<shelgon::command::OutputAction> {
+        let output = shelgon::command::CommandOutput {
             prompt: cmd.prompt,
             command: cmd.command.clone(),
             stdin: cmd.stdin.unwrap_or_default(),
             stdout: vec![cmd.command],
             stderr: Vec::new(),
         };
-        Ok(sheller::command::OutputAction::Command(output))
+        Ok(shelgon::command::OutputAction::Command(output))
     }
 }

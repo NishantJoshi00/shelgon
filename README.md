@@ -1,42 +1,46 @@
-# sheller
+# Shelgon <img src="https://img.pokemondb.net/artwork/vector/shelgon.png" align="right" width="128" />
 
-[![Crates.io](https://img.shields.io/crates/v/sheller.svg)](https://crates.io/crates/sheller)
-[![Documentation](https://docs.rs/sheller/badge.svg)](https://docs.rs/sheller)
+Shelgon is a robust Rust framework for building interactive REPL (Read-Eval-Print Loop) applications and custom shells. It provides a flexible, type-safe foundation with built-in terminal UI capabilities using `ratatui`.
+
+[![Crates.io](https://img.shields.io/crates/v/shelgon.svg)](https://crates.io/crates/shelgon)
+[![Documentation](https://docs.rs/shelgon/badge.svg)](https://docs.rs/shelgon)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-A flexible framework for building interactive terminal-based shell applications in Rust. `sheller` provides the foundation for creating custom shells with rich TUI features, command history, and customizable command execution.
 
 ## Features
 
-- 🚀 Easy-to-use API for building custom shell applications
-- 🎨 Built-in TUI with command history and interactive prompt
-- ⌨️ Rich keyboard input handling with customizable keybindings
-- 🔄 Asynchronous command execution support via Tokio
-- 📝 Command completion support
-- 📋 Command history with scrollback
-- 🎯 Custom prompt styling and configuration
-- ⚡ Zero-cost abstractions for command execution
+- 🛡️ **Type-safe Command Execution** - Like Shelgon's protective shell, your commands are wrapped in a type-safe interface
+- 🔄 **Async Runtime Integration** - Built on tokio for high-performance async operations
+- 🎨 **Beautiful TUI** - Powered by ratatui with support for styling and colors
+- ⌨️ **Rich Input Handling** - Complete keyboard interaction support including:
+  - Command history
+  - Cursor movement
+  - Tab completion
+  - Ctrl+C/Ctrl+D handling
+- 📝 **Custom Context Support** - Maintain state between commands with your own context type
+- 📥 **STDIN Support** - Handle multi-line input for commands that need it
 
 ## Installation
 
-Add this to your `Cargo.toml`:
+Add Shelgon to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sheller = "0.1.0"
+shelgon = "0.1.0"
+tokio = { version = "1.43.0", features = ["full"] }
+anyhow = "1.0.95"
 ```
 
 ## Quick Start
 
-Here's a simple example of creating an echo shell that repeats user input:
+Create a simple echo shell:
 
 ```rust
-use sheller::{command, renderer};
+use shelgon::{command, renderer};
 
 struct EchoExecutor {}
 
 impl command::New for EchoExecutor {
-    fn new() -> anyhow::Result<(Self, Self::Context)> {
+    fn new() -> anyhow::Result<(Self, ())> {
         Ok((Self {}, ()))
     }
 }
@@ -44,13 +48,13 @@ impl command::New for EchoExecutor {
 impl command::Execute for EchoExecutor {
     type Context = ();
 
-    fn prompt(&self, _ctx: &Self::Context) -> String {
-        "$ ".to_string()
+    fn prompt(&self, _: &Self::Context) -> String {
+        "$".to_string()
     }
 
     fn execute(
         &self,
-        _ctx: &mut Self::Context,
+        _: &mut Self::Context,
         cmd: command::CommandInput,
     ) -> anyhow::Result<command::OutputAction> {
         Ok(command::OutputAction::Command(command::CommandOutput {
@@ -61,13 +65,6 @@ impl command::Execute for EchoExecutor {
             stderr: Vec::new(),
         }))
     }
-
-    fn prepare(&self, cmd: &str) -> command::Prepare {
-        command::Prepare {
-            command: cmd.to_string(),
-            stdin_required: false,
-        }
-    }
 }
 
 fn main() -> anyhow::Result<()> {
@@ -77,91 +74,41 @@ fn main() -> anyhow::Result<()> {
 }
 ```
 
-## Core Concepts
+## Evolution Guide: Building Your Own Shell <img src="https://img.pokemondb.net/artwork/vector/salamence.png" align="right" width="128" />
 
-### Executor
+Here's how to build a dragon-like shell with `shelgon`:
 
-The `Execute` trait is the core of `sheller`. It defines how your shell handles commands:
+1. **Define Your Executor**: Create a type that implements `command::Execute`
+2. **Create Your Context**: Design a context type to maintain state between commands
+3. **Implement Command Logic**: Add your command execution logic in the `execute` method
+4. **Add Tab Completion**: Implement the `completion` method for smart suggestions
+5. **Handle STDIN**: Use the `prepare` method to indicate which commands need input
 
-- `prompt`: Defines the shell prompt
-- `prepare`: Pre-processes commands and determines if they need stdin
-- `execute`: Handles actual command execution
-- `completion`: Provides command completion suggestions (optional)
+## Examples
 
-### Command Flow
+Check out the [examples](./examples) directory for more advanced usage patterns, including:
 
-1. User enters a command
-2. `prepare` is called to determine command requirements
-3. If stdin is required, user can input multiple lines
-4. `execute` is called with the command and any stdin
-5. Output is displayed in the TUI
-
-### TUI Features
-
-- Command history navigation
-- Line editing with cursor movement
-- Tab completion support
-- Clear screen (Ctrl+L)
-- Exit shell (Ctrl+D)
-- Command interruption (Ctrl+C)
-
-## Advanced Usage
-
-### Custom Context
-
-You can maintain state between commands using a custom context:
-
-```rust
-struct MyContext {
-    variables: HashMap<String, String>,
-}
-
-struct MyExecutor {}
-
-impl command::Execute for MyExecutor {
-    type Context = MyContext;
-    
-    // Implementation details...
-}
-```
-
-### Async Command Execution
-
-`sheller` provides access to a Tokio runtime for async operations:
-
-```rust
-fn execute(
-    &self,
-    ctx: &mut Self::Context,
-    cmd: command::CommandInput,
-) -> anyhow::Result<command::OutputAction> {
-    cmd.runtime.block_on(async {
-        // Your async code here
-    })
-}
-```
-
-### Command Completion
-
-Implement custom command completion:
-
-```rust
-fn completion(
-    &self,
-    ctx: &Self::Context,
-    incomplete: &str,
-) -> anyhow::Result<(String, Vec<String>)> {
-    // Return (fixed_part, suggestions)
-    Ok(("".to_string(), vec!["command1".to_string(), "command2".to_string()]))
-}
-```
+- `echosh.rs`: A basic echo shell demonstrating core functionality
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+Contributions are welcome! Please feel free to submit a Pull Request. Before contributing, please:
 
-Please make sure to update tests as appropriate.
+1. Check existing issues or create a new one
+2. Fork the repository
+3. Create your feature branch (`git checkout -b feature/amazing-feature`)
+4. Commit your changes (`git commit -m 'Add some amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+
+Built with 💙 by Nishant Joshi
+
+</div>
