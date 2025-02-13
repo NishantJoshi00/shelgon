@@ -117,7 +117,7 @@ pub struct App<T: command::Execute> {
     /// information about the renderer.
     state: State,
     #[cfg(feature = "tokio")]
-    /// The runtime that is passed to the [`Execute`] trait. This is used to facilitate executing
+    /// The runtime that is passed to the `Execute` trait. This is used to facilitate executing
     /// on [`std::future::Future`]s, creating [`tokio::task::JoinHandle`]s, etc.
     runtime: Arc<Runtime>,
     /// The history of the commands that are executed.
