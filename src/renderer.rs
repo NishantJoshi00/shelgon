@@ -146,6 +146,8 @@ enum Next {
     Continue,
     /// Exit the shell.
     Exit(String),
+    /// Clear renderer buffer
+    Clear
 }
 
 impl<T: command::Execute> App<T> {
@@ -329,7 +331,7 @@ impl<T: command::Execute> App<T> {
                 }
                 (KeyCode::Enter, KeyModifiers::NONE) => match self.state {
                     State::Idle(..) => {
-                        self.execute_command()?;
+                        return self.execute_command();
                     }
                     State::Running(ref mut _pre, ref mut stdin) => {
                         stdin.push(String::new());
@@ -375,6 +377,10 @@ impl<T: command::Execute> App<T> {
             match next {
                 Ok(Next::Continue) => continue,
                 Ok(Next::Exit(msg)) => break Ok(msg),
+                Ok(Next::Clear) => {
+                    terminal.clear()?;
+                    continue;
+                }
                 Err(e) => break Err(e),
             }
         };
@@ -478,6 +484,7 @@ impl<T: command::Execute> App<T> {
             }
             command::OutputAction::Clear => {
                 self.history.clear();
+                return Ok(Next::Clear);
             }
         }
 
