@@ -147,7 +147,7 @@ enum Next {
     /// Exit the shell.
     Exit(String),
     /// Clear renderer buffer
-    Clear
+    Clear,
 }
 
 impl<T: command::Execute> App<T> {
