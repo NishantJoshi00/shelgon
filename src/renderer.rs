@@ -337,6 +337,18 @@ impl<T: command::Execute> App<T> {
                         stdin.push(String::new());
                     }
                 },
+                (KeyCode::Up, KeyModifiers::NONE) => {
+                    let last = self.history.last().map(|x| x.command.clone());
+                    if let Some(last) = last {
+                        match self.state {
+                            State::Idle(ref mut cmd, ref mut cursor, _) => {
+                                *cmd = last;
+                                *cursor = cmd.len();
+                            }
+                            State::Running(..) => {}
+                        }
+                    }
+                }
                 _ => {}
             }
         }
