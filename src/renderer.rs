@@ -365,7 +365,7 @@ impl<T: command::Execute> App<T> {
     /// This method returns an `anyhow::Result<()>` which is used to handle the errors that are
     /// encountered during the execution of the shell.
     ///
-    pub fn execute(mut self) -> anyhow::Result<()> {
+    pub fn execute(mut self) -> anyhow::Result<String> {
         crossterm::terminal::enable_raw_mode()?;
 
         let mut stdout = io::stdout();
@@ -401,9 +401,7 @@ impl<T: command::Execute> App<T> {
         crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
         terminal.show_cursor()?;
 
-        println!("{}", response?);
-
-        Ok(())
+        response
     }
 
     // helpers
