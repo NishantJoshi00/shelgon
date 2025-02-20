@@ -78,5 +78,8 @@ fn main() -> anyhow::Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
     // Create and run the shell
     let app = shelgon::renderer::App::<Executor>::new(rt)?;
-    app.execute()
+    let exit_msg = app.execute()?;
+    println!("Exited with: {}", exit_msg);
+
+    Ok(())
 }
