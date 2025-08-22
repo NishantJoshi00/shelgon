@@ -87,7 +87,7 @@ use std::io;
 use std::sync::Arc;
 
 use crossterm::{
-    event::{KeyCode, KeyModifiers, KeyEventKind},
+    event::{KeyCode, KeyEventKind, KeyModifiers},
     terminal::{EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{
@@ -302,7 +302,8 @@ impl<T: command::Execute> App<T> {
                         }
                     }
                 }
-                (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT, _) => match self.state {
+                (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT, _) => match self.state
+                {
                     State::Idle(ref mut cmd, ref mut cursor, ref mut comp) => {
                         cmd.insert(*cursor, c);
                         *cursor += 1;
@@ -506,7 +507,7 @@ impl<T: command::Execute> App<T> {
 }
 
 /// Render the history of the commands.
-fn render_history(history: &command::CommandOutput) -> Vec<Line> {
+fn render_history(history: &command::CommandOutput) -> Vec<Line<'_>> {
     let command = Line::from(vec![
         Span::styled(history.prompt.clone(), Style::default().blue()),
         Span::raw(" "),
