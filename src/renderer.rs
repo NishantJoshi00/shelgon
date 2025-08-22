@@ -87,7 +87,7 @@ use std::io;
 use std::sync::Arc;
 
 use crossterm::{
-    event::{KeyCode, KeyModifiers},
+    event::{KeyCode, KeyEventKind, KeyModifiers},
     terminal::{EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{
@@ -272,22 +272,25 @@ impl<T: command::Execute> App<T> {
     /// Handle the input from the user.
     fn input(&mut self, event: crossterm::event::Event) -> anyhow::Result<Next> {
         if let crossterm::event::Event::Key(ke) = event {
-            match (ke.code, ke.modifiers) {
-                (KeyCode::Char('l'), KeyModifiers::CONTROL) => {
+            match (ke.code, ke.modifiers, ke.kind) {
+                (_, _, KeyEventKind::Release) => {
+                    // Ignore Release events, prevents getting double keypresses on windows
+                }
+                (KeyCode::Char('l'), KeyModifiers::CONTROL, _) => {
                     self.history.clear();
                     return Ok(Next::Continue);
                 }
 
-                (KeyCode::Char('d') | KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+                (KeyCode::Char('d') | KeyCode::Char('c'), KeyModifiers::CONTROL, _) => {
                     if let State::Running(..) = &self.state {
                         self.continue_execution()?;
                     } else {
                         return Ok(Next::Exit("".to_string()));
                     }
                 }
-                (KeyCode::Left, KeyModifiers::NONE) => self.move_cursor_left(),
-                (KeyCode::Right, KeyModifiers::NONE) => self.move_cursor_right(),
-                (KeyCode::Tab, KeyModifiers::NONE) => {
+                (KeyCode::Left, KeyModifiers::NONE, _) => self.move_cursor_left(),
+                (KeyCode::Right, KeyModifiers::NONE, _) => self.move_cursor_right(),
+                (KeyCode::Tab, KeyModifiers::NONE, _) => {
                     if let State::Idle(ref mut cmd, ref mut cursor, ref mut comp @ None) =
                         self.state
                     {
@@ -299,7 +302,8 @@ impl<T: command::Execute> App<T> {
                         }
                     }
                 }
-                (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => match self.state {
+                (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT, _) => match self.state
+                {
                     State::Idle(ref mut cmd, ref mut cursor, ref mut comp) => {
                         cmd.insert(*cursor, c);
                         *cursor += 1;
@@ -326,10 +330,10 @@ impl<T: command::Execute> App<T> {
                         });
                     }
                 },
-                (KeyCode::Backspace, KeyModifiers::NONE) => {
+                (KeyCode::Backspace, KeyModifiers::NONE, _) => {
                     self.cursor_backspace();
                 }
-                (KeyCode::Enter, KeyModifiers::NONE) => match self.state {
+                (KeyCode::Enter, KeyModifiers::NONE, _) => match self.state {
                     State::Idle(..) => {
                         return self.execute_command();
                     }
@@ -337,7 +341,7 @@ impl<T: command::Execute> App<T> {
                         stdin.push(String::new());
                     }
                 },
-                (KeyCode::Up, KeyModifiers::NONE) => {
+                (KeyCode::Up, KeyModifiers::NONE, _) => {
                     let last = self.history.last().map(|x| x.command.clone());
                     if let Some(last) = last {
                         match self.state {
@@ -503,7 +507,7 @@ impl<T: command::Execute> App<T> {
 }
 
 /// Render the history of the commands.
-fn render_history(history: &command::CommandOutput) -> Vec<Line> {
+fn render_history(history: &command::CommandOutput) -> Vec<Line<'_>> {
     let command = Line::from(vec![
         Span::styled(history.prompt.clone(), Style::default().blue()),
         Span::raw(" "),

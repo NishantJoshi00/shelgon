@@ -128,8 +128,7 @@ pub struct CommandInput {
 /// command.
 ///
 /// Supported behaviors:
-/// - `stdin_required`: If the command requires stdin, the renderer should prompt the user for
-///     input.
+/// - `stdin_required`: If the command requires stdin, the renderer should prompt the user for input.
 ///
 #[derive(Debug, Clone)]
 pub struct Prepare {
