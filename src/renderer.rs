@@ -372,6 +372,13 @@ impl<T: command::Execute> App<T> {
     pub fn execute(mut self) -> anyhow::Result<String> {
         crossterm::terminal::enable_raw_mode()?;
 
+        let default_panic = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            _ = crossterm::terminal::disable_raw_mode();
+            println!();
+            default_panic(info);
+        }));
+
         let mut stdout = io::stdout();
         crossterm::execute!(stdout, EnterAlternateScreen)?;
         let backend = CrosstermBackend::new(stdout);
