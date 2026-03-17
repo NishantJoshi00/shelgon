@@ -375,7 +375,6 @@ impl<T: command::Execute> App<T> {
         let default_panic = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
             _ = crossterm::terminal::disable_raw_mode();
-            println!();
             default_panic(info);
         }));
 
